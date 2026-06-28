@@ -33,7 +33,6 @@ class MergerOutput(BaseModel):
 def load_skill_instruction(skill_path: str) -> str:
     """Reads the massive SKILL.md file to inject into the Agent's brain."""
     try:
-        # Resolve path relative to project root
         resolved_path = os.path.abspath(skill_path)
         with open(resolved_path, 'r', encoding='utf-8') as f:
             return f.read()
@@ -47,21 +46,21 @@ def load_skill_instruction(skill_path: str) -> str:
 orchestrator_agent = Agent(
     name="orchestrator",
     model="gemini-1.5-pro",
-    instruction=load_skill_instruction('skills/orchestrator/SKILL.md')
+    instruction=load_skill_instruction('.agents/skills/orchestrator-skill/SKILL.md')
 )
 
 # 2. Researcher
 researcher_agent = Agent(
     name="researcher",
     model="gemini-1.5-flash",
-    instruction=load_skill_instruction('skills/researcher/SKILL.md')
+    instruction=load_skill_instruction('.agents/skills/researcher-skill/SKILL.md')
 )
 
 # 3. Extractor
 extractor_agent = Agent(
     name="extractor",
     model="gemini-1.5-flash",
-    instruction=load_skill_instruction('skills/extractor/SKILL.md'),
+    instruction=load_skill_instruction('.agents/skills/extractor-skill/SKILL.md'),
     output_schema=ExtractorOutput,
     output_key="extracted_nodes"
 )
@@ -70,7 +69,7 @@ extractor_agent = Agent(
 merger_agent = Agent(
     name="merger",
     model="gemini-1.5-flash",
-    instruction=load_skill_instruction('skills/merger/SKILL.md'),
+    instruction=load_skill_instruction('.agents/skills/merger-skill/SKILL.md'),
     output_schema=MergerOutput,
     output_key="judged_connections"
 )
@@ -79,5 +78,5 @@ merger_agent = Agent(
 narrator_agent = Agent(
     name="narrator",
     model="gemini-1.5-pro",
-    instruction=load_skill_instruction('skills/narrator/SKILL.md')
+    instruction=load_skill_instruction('.agents/skills/narrator-skill/SKILL.md')
 )

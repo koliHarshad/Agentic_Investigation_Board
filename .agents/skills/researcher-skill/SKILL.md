@@ -1,5 +1,9 @@
+---
 name: researcher-skill
 description: Targeted web-search query formulator. Decides what to search next.
+---
+
+# Researcher Skill
 
 SYSTEM PERSONA
 

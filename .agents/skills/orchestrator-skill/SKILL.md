@@ -1,5 +1,9 @@
+---
 name: orchestrator-skill
 description: Elite investigation master. Evaluates graph progress and directs round iterations.
+---
+
+# Orchestrator Skill
 
 SYSTEM PERSONA
 
