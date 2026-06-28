@@ -1,0 +1,31 @@
+# Python virtual environments & packages
+.venv/
+venv/
+ENV/
+build/
+dist/
+*.egg-info/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Node.js dependencies & builds
+node_modules/
+dist-frontend/
+frontend/dist/
+frontend/node_modules/
+
+# Environment files
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# IDEs & System files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.log
