@@ -10,7 +10,6 @@ import google.genai._transformers as transformers
 original_process_schema = transformers.process_schema
 
 def custom_process_schema(schema, client, defs=None, *args, **kwargs):
-    original_process_schema(schema, client, defs, *args, **kwargs)
     def strip_additional_properties(d):
         if not isinstance(d, dict):
             return
@@ -24,6 +23,7 @@ def custom_process_schema(schema, client, defs=None, *args, **kwargs):
                     if isinstance(item, dict):
                         strip_additional_properties(item)
     strip_additional_properties(schema)
+    original_process_schema(schema, client, defs, *args, **kwargs)
 
 transformers.process_schema = custom_process_schema
 
