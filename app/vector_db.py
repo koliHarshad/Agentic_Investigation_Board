@@ -15,7 +15,7 @@ class VectorDB:
         try:
             # Using gemini-embedding-2 as verified by Client.models.list()
             response = self.client.models.embed_content(
-                model="gemini-embedding-2",
+                model="gemini-embedding-001",
                 contents=text
             )
             return response.embeddings[0].values
