@@ -13,8 +13,9 @@ class VectorDB:
 
     def _get_embedding(self, text: str) -> List[float]:
         try:
+            # Using gemini-embedding-2 as verified by Client.models.list()
             response = self.client.models.embed_content(
-                model="text-embedding-004",
+                model="gemini-embedding-2",
                 contents=text
             )
             return response.embeddings[0].values
