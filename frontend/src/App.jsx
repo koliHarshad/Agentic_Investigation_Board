@@ -39,10 +39,27 @@ export default function App() {
   const [isPlanCollapsed, setIsPlanCollapsed] = useState(false);
   const [isSummaryOpen, setIsSummaryOpen] = useState(false);
   const [hasNewSummary, setHasNewSummary] = useState(false);
+  const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
 
   const wsRef = useRef(null);
   const logsEndRef = useRef(null);
   const graphRef = useRef(null);
+  const containerRef = useRef(null);
+
+  // ResizeObserver to dynamically track dimensions of right panel
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const observer = new ResizeObserver((entries) => {
+      for (let entry of entries) {
+        setDimensions({
+          width: entry.contentRect.width,
+          height: entry.contentRect.height
+        });
+      }
+    });
+    observer.observe(containerRef.current);
+    return () => observer.disconnect();
+  }, []);
 
   // Auto-scroll chat logs
   useEffect(() => {
@@ -456,7 +473,7 @@ export default function App() {
           </div>
 
           {/* The canvas force-directed graph renderer */}
-          <div className="graph-canvas-container">
+          <div className="graph-canvas-container" ref={containerRef}>
             {visibleGraphData.nodes.length === 0 ? (
               <div className="empty-graph-state">
                 No active correlations on the board. Start an investigation to draw the board.
@@ -464,6 +481,8 @@ export default function App() {
             ) : (
               <ForceGraph2D
                 ref={graphRef}
+                width={dimensions.width}
+                height={dimensions.height}
                 graphData={visibleGraphData}
                 nodeCanvasObject={paintNode}
                 linkColor={() => '#ef4444'} 

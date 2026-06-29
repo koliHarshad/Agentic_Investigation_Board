@@ -345,6 +345,8 @@ h1, h2, h3, h4, h5, h6 {
   flex-direction: column;
   background-color: #f8fafc;
   position: relative;
+  min-width: 0;
+  overflow: hidden;
 }
 
 /* Glassmorphism panels */
@@ -752,6 +754,8 @@ h1, h2, h3, h4, h5, h6 {
   flex: 1;
   height: 100%;
   width: 100%;
+  overflow: hidden;
+  position: relative;
 }
 
 .empty-graph-state {
