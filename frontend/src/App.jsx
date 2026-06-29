@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import ForceGraph2D from 'react-force-graph-2d';
 import { 
   Send, 
@@ -6,7 +6,13 @@ import {
   Activity, 
   BookOpen, 
   FileText, 
-  AlertTriangle
+  AlertTriangle,
+  ChevronDown,
+  ChevronUp,
+  Maximize2,
+  X,
+  Compass,
+  Link2
 } from 'lucide-react';
 
 const NODE_COLORS = {
@@ -20,6 +26,7 @@ const NODE_COLORS = {
 
 export default function App() {
   const [query, setQuery] = useState('');
+  const [activeQuery, setActiveQuery] = useState('');
   const [statusLogs, setStatusLogs] = useState([]);
   const [orchestratorPlan, setOrchestratorPlan] = useState('');
   const [researchQueries, setResearchQueries] = useState([]);
@@ -28,41 +35,82 @@ export default function App() {
   const [isInvestigating, setIsInvestigating] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   
+  // UX State
+  const [isPlanCollapsed, setIsPlanCollapsed] = useState(false);
+  const [isSummaryOpen, setIsSummaryOpen] = useState(false);
+  const [hasNewSummary, setHasNewSummary] = useState(false);
+
   const wsRef = useRef(null);
   const logsEndRef = useRef(null);
   const graphRef = useRef(null);
 
-  // Auto-scroll logs
+  // Auto-scroll chat logs
   useEffect(() => {
     logsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [statusLogs]);
 
-  // Adjust graph zoom/fit when data loads
+  // Set new summary notification dot when narrative arrives
   useEffect(() => {
-    if (graphData.nodes.length > 0 && graphRef.current) {
-      graphRef.current.zoomToFit(400, 50);
+    if (narrative) {
+      setHasNewSummary(true);
     }
-  }, [graphData.nodes.length]);
+  }, [narrative]);
+
+  // Smooth fit-to-canvas once at the end of the investigation
+  const handleCenterGraph = () => {
+    if (graphRef.current && graphData.nodes.length > 0) {
+      graphRef.current.zoomToFit(600, 80);
+    }
+  };
+
+  // Compute unconnected clue nodes dynamically
+  const unconnectedClues = useMemo(() => {
+    const connectedNodeIds = new Set();
+    graphData.links.forEach(link => {
+      const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
+      const targetId = typeof link.target === 'object' ? link.target.id : link.target;
+      connectedNodeIds.add(sourceId);
+      connectedNodeIds.add(targetId);
+    });
+    return graphData.nodes.filter(node => !connectedNodeIds.has(node.id));
+  }, [graphData]);
+
+  // Clean graph data excluding unconnected nodes for D3 simulation
+  const visibleGraphData = useMemo(() => {
+    const connectedNodeIds = new Set();
+    graphData.links.forEach(link => {
+      const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
+      const targetId = typeof link.target === 'object' ? link.target.id : link.target;
+      connectedNodeIds.add(sourceId);
+      connectedNodeIds.add(targetId);
+    });
+    return {
+      nodes: graphData.nodes.filter(node => connectedNodeIds.has(node.id)),
+      links: graphData.links
+    };
+  }, [graphData]);
 
   const handleStartInvestigation = () => {
     if (!query.trim() || isInvestigating) return;
 
     // Reset State
+    setActiveQuery(query);
     setStatusLogs([]);
     setOrchestratorPlan('');
     setResearchQueries([]);
     setGraphData({ nodes: [], links: [] });
     setNarrative('');
     setErrorMsg('');
+    setHasNewSummary(false);
+    setIsSummaryOpen(false);
     setIsInvestigating(true);
 
-    // Setup WebSocket
     const ws = new WebSocket('ws://127.0.0.1:8000/ws/investigate');
     wsRef.current = ws;
 
     ws.onopen = () => {
       ws.send(JSON.stringify({ query: query }));
-      setStatusLogs(prev => [...prev, 'Connected to server. Initiating investigation pipeline...']);
+      setStatusLogs(prev => [...prev, 'Connected to correlation engine. Initiating multi-agent pipeline...']);
     };
 
     ws.onmessage = (event) => {
@@ -86,7 +134,7 @@ export default function App() {
               nodes: [...prev.nodes, msg.data]
             };
           });
-          setStatusLogs(prev => [...prev, `[Node Extracted] ${msg.data.name} (${msg.data.type})`]);
+          setStatusLogs(prev => [...prev, `[Clue Extracted] Found node: ${msg.data.name} (${msg.data.type})`]);
           break;
         case 'edge_added':
           setGraphData(prev => {
@@ -100,7 +148,7 @@ export default function App() {
               links: [...prev.links, msg.data]
             };
           });
-          setStatusLogs(prev => [...prev, `[Relationship Found] Connected: ${msg.data.source} ↔ ${msg.data.target} (${msg.data.type})`]);
+          setStatusLogs(prev => [...prev, `[Connection Judged] Added relationship: ${msg.data.source} ↔ ${msg.data.target} (${msg.data.type})`]);
           break;
         case 'narrative':
           setNarrative(msg.data);
@@ -108,6 +156,12 @@ export default function App() {
         case 'complete':
           setStatusLogs(prev => [...prev, 'Investigation sequence completed. Final story rendered.']);
           setIsInvestigating(false);
+          // Wait a small bit for D3 simulation to settle, then fit to screen
+          setTimeout(() => {
+            if (graphRef.current) {
+              graphRef.current.zoomToFit(600, 80);
+            }
+          }, 800);
           ws.close();
           break;
         case 'error':
@@ -138,10 +192,10 @@ export default function App() {
     ctx.font = `${fontSize}px 'Inter', sans-serif`;
     
     // Draw outer glow border
-    const r = 6;
+    const r = 7;
     ctx.beginPath();
-    ctx.arc(node.x, node.y, r + 2, 0, 2 * Math.PI, false);
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+    ctx.arc(node.x, node.y, r + 2.5, 0, 2 * Math.PI, false);
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
     ctx.fill();
 
     // Inner circle
@@ -157,7 +211,7 @@ export default function App() {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillStyle = '#0f172a';
-    ctx.fillText(label, node.x, node.y + r + 7);
+    ctx.fillText(label, node.x, node.y + r + 8);
   }, []);
 
   return (
@@ -178,25 +232,69 @@ export default function App() {
           {isInvestigating && (
             <div className="status-indicator">
               <span className="status-dot"></span>
-              <span>Running round sequence...</span>
+              <span>Correlating data...</span>
             </div>
           )}
-          <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>Capstone Submission v1.0</span>
+          <span style={{ fontSize: '0.75rem', color: '#94a3b8', fontWeight: '500' }}>Capstone Submission v1.1</span>
         </div>
       </header>
 
-      {/* Main Workspace split */}
+      {/* Main Workspace */}
       <div className="workspace">
-        {/* Left Side: Controller, Chat Logs & Narrative */}
+        
+        {/* Unified Chat/Search and Progress Log Left Panel */}
         <div className="left-panel">
-          
-          {/* Query input panel */}
+          <div className="panel-header">
+            <Search className="h-4 w-4" style={{ width: '16px', height: '16px', color: '#ef4444' }} />
+            <h2>Correlation Command & Logs</h2>
+          </div>
+
+          {/* Combined Scrollable Chat Interface */}
+          <div className="chat-log-box">
+            {statusLogs.length === 0 && !activeQuery ? (
+              <div className="empty-chat-state">
+                <Search className="empty-icon" />
+                <p>Awaiting investigation query...</p>
+                <span>Input a scenario at the bottom to trigger the autonomous mapping sequence.</span>
+              </div>
+            ) : (
+              <div className="chat-flow-container">
+                {/* User Prompt Message Bubble */}
+                {activeQuery && (
+                  <div className="chat-bubble user-bubble">
+                    <div className="bubble-label">Scenario Query</div>
+                    <div className="bubble-text">{activeQuery}</div>
+                  </div>
+                )}
+
+                {/* Status Log Bubbles */}
+                {statusLogs.map((log, idx) => {
+                  let isNode = log.includes('[Clue Extracted]');
+                  let isConnection = log.includes('[Connection Judged]');
+                  let isError = log.includes('[Error]');
+                  let bubbleClass = "chat-bubble status-bubble";
+                  if (isNode) bubbleClass += " node-bubble";
+                  if (isConnection) bubbleClass += " connection-bubble";
+                  if (isError) bubbleClass += " error-bubble";
+
+                  return (
+                    <div key={idx} className={bubbleClass}>
+                      <span className="log-time">{new Date().toLocaleTimeString()}</span>
+                      <span className="log-text">{log}</span>
+                    </div>
+                  );
+                })}
+                <div ref={logsEndRef} />
+              </div>
+            )}
+          </div>
+
+          {/* Query Input fixed at the bottom of left panel */}
           <div className="query-panel">
-            <label className="panel-label">Investigate Prompt</label>
             <div className="input-container">
               <input
                 type="text"
-                placeholder="e.g. Investigate the collapse of Enron..."
+                placeholder="Ask to investigate a scenario..."
                 className="query-input"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
@@ -219,82 +317,118 @@ export default function App() {
               </div>
             )}
           </div>
-
-          {/* Tabbed view: Logs & Narratives */}
-          <div className="list-wrapper">
-            {/* Live Progress Logs */}
-            <div className="logs-section">
-              <div className="section-title">
-                <Search className="h-4 w-4" style={{ width: '16px', height: '16px', color: '#64748b' }} />
-                <h3>Investigation Logs</h3>
-              </div>
-              <div className="logs-box">
-                {statusLogs.length === 0 ? (
-                  <div style={{ textAlign: 'center', color: '#94a3b8', padding: '32px 0' }}>
-                    Enter a query above to start the sequential loop
-                  </div>
-                ) : (
-                  statusLogs.map((log, idx) => (
-                    <div key={idx} className="log-entry">
-                      <span className="log-time">[{new Date().toLocaleTimeString()}]</span>
-                      <span>{log}</span>
-                    </div>
-                  ))
-                )}
-                <div ref={logsEndRef} />
-              </div>
-            </div>
-
-            {/* Final Case Narrative Panel */}
-            <div className="narrative-section">
-              <div className="section-title">
-                <FileText className="h-4 w-4" style={{ width: '16px', height: '16px', color: '#64748b' }} />
-                <h3>Final Narrative Report</h3>
-              </div>
-              <div className="narrative-box">
-                {narrative ? (
-                  <div style={{ whitespace: 'pre-line' }}>
-                    {narrative}
-                  </div>
-                ) : (
-                  <div style={{ textAlign: 'center', color: '#94a3b8', padding: '32px 0', fontSize: '0.75rem', fontFamily: 'monospace' }}>
-                    {isInvestigating ? 'Awaiting loop completion...' : 'Final narrative report will appear here.'}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
         </div>
 
         {/* Right Side: The Force Directed Evidence Board */}
         <div className="right-panel">
-          {/* Subheading overlays */}
+          
+          {/* Top-Left Collapsible Plan Panel */}
           <div className="plan-overlay">
-            <div className="glass-panel overlay-card" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <BookOpen className="h-4 w-4" style={{ width: '16px', height: '16px', color: '#ef4444' }} />
-              <span style={{ fontSize: '0.75rem', fontWeight: '700', color: '#0f172a' }}>Active Evidence Board (Light Theme)</span>
+            <div className="glass-panel overlay-card toggle-card" onClick={() => setIsPlanCollapsed(!isPlanCollapsed)}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyBehavior: 'space-between', width: '100%' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <BookOpen className="h-4 w-4" style={{ width: '16px', height: '16px', color: '#ef4444' }} />
+                  <span style={{ fontSize: '0.75rem', fontWeight: '700', color: '#0f172a' }}>
+                    Active Plan & Context
+                  </span>
+                </div>
+                {isPlanCollapsed ? <ChevronDown className="h-4 w-4 collapsed-arrow" /> : <ChevronUp className="h-4 w-4 collapsed-arrow" />}
+              </div>
+              
+              {!isPlanCollapsed && (
+                <div className="collapsible-plan-content">
+                  {orchestratorPlan ? (
+                    <div style={{ marginTop: '10px' }}>
+                      <span className="overlay-label">Current Plan</span>
+                      <p className="overlay-content">{orchestratorPlan}</p>
+                    </div>
+                  ) : (
+                    <p className="overlay-content" style={{ marginTop: '8px', color: '#94a3b8', fontStyle: 'italic' }}>
+                      Awaiting query execution...
+                    </p>
+                  )}
+                  
+                  {researchQueries.length > 0 && (
+                    <div style={{ marginTop: '10px', borderTop: '1px solid #e2e8f0', paddingTop: '8px' }}>
+                      <span className="overlay-label">Active Research Queries</span>
+                      <ul style={{ fontSize: '0.72rem', color: '#334155', margin: '4px 0 0 0', paddingLeft: '16px' }}>
+                        {researchQueries.map((q, idx) => (
+                          <li key={idx}>{q}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
-            
-            {orchestratorPlan && (
-              <div className="glass-panel overlay-card">
-                <span className="overlay-label">Current Plan</span>
-                <p className="overlay-content" style={{ display: '-webkit-box', WebkitLineClamp: 4, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-                  {orchestratorPlan}
-                </p>
-              </div>
-            )}
-            
-            {researchQueries.length > 0 && (
-              <div className="glass-panel overlay-card">
-                <span className="overlay-label">Active Queries</span>
-                <ul style={{ fontSize: '0.75rem', color: '#334155', margin: '4px 0 0 0', paddingLeft: '16px' }}>
-                  {researchQueries.map((q, idx) => (
-                    <li key={idx}>{q}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
           </div>
+
+          {/* Floating Actions overlay (Top-Right Summary Drawer button + Center Graph button) */}
+          <div className="floating-actions-overlay">
+            <button className="floating-action-btn" onClick={handleCenterGraph} title="Center Graph">
+              <Compass className="h-5 w-5" />
+            </button>
+
+            <button 
+              className={`floating-action-btn summary-trigger-btn ${hasNewSummary ? 'pulse-border' : ''}`} 
+              onClick={() => {
+                setIsSummaryOpen(true);
+                setHasNewSummary(false);
+              }}
+              title="View Case Narrative"
+            >
+              <FileText className="h-5 w-5" />
+              {hasNewSummary && <span className="notification-dot"></span>}
+            </button>
+          </div>
+
+          {/* Slide-over Full-Height Summary Panel / Modal */}
+          {isSummaryOpen && (
+            <div className="narrative-drawer">
+              <div className="drawer-header">
+                <div className="drawer-title">
+                  <FileText className="h-5 w-5" style={{ color: '#ef4444' }} />
+                  <h2>Case Narrative Report</h2>
+                </div>
+                <button className="close-drawer-btn" onClick={() => setIsSummaryOpen(false)}>
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+              <div className="drawer-body">
+                {narrative ? (
+                  <div className="narrative-markdown">
+                    {narrative}
+                  </div>
+                ) : (
+                  <div className="empty-drawer-state">
+                    <AlertTriangle className="h-10 w-10 text-slate-300" style={{ marginBottom: '12px' }} />
+                    <p>No narrative report drafted yet.</p>
+                    <span>The Case Narrative will automatically compile and notify you once the multi-agent correlation cycle completes.</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Floating Unconnected Clues overlay (Right middle panel) */}
+          {unconnectedClues.length > 0 && (
+            <div className="glass-panel clues-overlay">
+              <span className="clues-header">Unconnected Clues</span>
+              <div className="clues-list">
+                {unconnectedClues.map((node) => (
+                  <div 
+                    key={node.id} 
+                    className="clue-tag"
+                    style={{ borderLeft: `3px solid ${NODE_COLORS[node.type] || NODE_COLORS.other}` }}
+                    title={`Source: ${node.source_document_id}\nSnippet: "${node.source_snippet}"`}
+                  >
+                    <span className="clue-tag-name">{node.name}</span>
+                    <span className="clue-tag-type">{node.type}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Colored Node Legend overlay */}
           <div className="glass-panel legend-overlay">
@@ -323,19 +457,50 @@ export default function App() {
 
           {/* The canvas force-directed graph renderer */}
           <div className="graph-canvas-container">
-            {graphData.nodes.length === 0 ? (
+            {visibleGraphData.nodes.length === 0 ? (
               <div className="empty-graph-state">
-                No active entities on the board. Start an investigation to draw the board.
+                No active correlations on the board. Start an investigation to draw the board.
               </div>
             ) : (
               <ForceGraph2D
                 ref={graphRef}
-                graphData={graphData}
+                graphData={visibleGraphData}
                 nodeCanvasObject={paintNode}
                 linkColor={() => '#ef4444'} 
                 linkWidth={(link) => (link.confidence ? link.confidence * 3.5 : 2)}
-                linkLabel={(link) => `${link.type} (confidence: ${(link.confidence * 100).toFixed(0)}%)`}
-                d3VelocityDecay={0.3}
+                nodeLabel={(node) => `
+                  <div class="graph-tooltip">
+                    <div class="tooltip-title">${node.name}</div>
+                    <div class="tooltip-type">${node.type.toUpperCase()}</div>
+                    ${node.attributes && Object.keys(node.attributes).length > 0 
+                      ? `<div class="tooltip-attrs">
+                          ${Object.entries(node.attributes)
+                            .map(([key, val]) => `<div><strong>${key}:</strong> ${val}</div>`)
+                            .join('')}
+                         </div>`
+                      : ''
+                    }
+                    <div class="tooltip-snippet">
+                      <strong>Source Text:</strong> "${node.source_snippet}"
+                      <br/><span class="tooltip-doc">Document ID: ${node.source_document_id}</span>
+                    </div>
+                  </div>
+                `}
+                linkLabel={(link) => `
+                  <div class="graph-tooltip">
+                    <div class="tooltip-title">Correlated Relationship</div>
+                    <div class="tooltip-text">
+                      <strong>${link.source.name || link.source}</strong> 
+                      <span class="rel-badge">${link.type}</span> 
+                      <strong>${link.target.name || link.target}</strong>
+                    </div>
+                    <div class="tooltip-snippet">
+                      <strong>Confidence:</strong> ${(link.confidence * 100).toFixed(0)}%
+                      <br/><strong>Reasoning:</strong> "${link.reasoning}"
+                    </div>
+                  </div>
+                `}
+                d3VelocityDecay={0.25}
                 cooldownTicks={100}
               />
             )}
