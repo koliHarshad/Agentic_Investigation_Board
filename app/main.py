@@ -4,6 +4,29 @@ import logging
 import uuid
 import sys
 import re
+import google.genai._transformers as transformers
+
+# Apply monkeypatch to strip additionalProperties from schemas for Developer API compatibility
+original_process_schema = transformers.process_schema
+
+def custom_process_schema(schema, client, defs=None, *args, **kwargs):
+    original_process_schema(schema, client, defs, *args, **kwargs)
+    def strip_additional_properties(d):
+        if not isinstance(d, dict):
+            return
+        if "additionalProperties" in d:
+            del d["additionalProperties"]
+        for val in d.values():
+            if isinstance(val, dict):
+                strip_additional_properties(val)
+            elif isinstance(val, list):
+                for item in val:
+                    if isinstance(item, dict):
+                        strip_additional_properties(item)
+    strip_additional_properties(schema)
+
+transformers.process_schema = custom_process_schema
+
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
