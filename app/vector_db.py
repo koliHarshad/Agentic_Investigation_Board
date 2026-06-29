@@ -1,6 +1,6 @@
 import numpy as np
 from google import genai
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 import logging
 
 logger = logging.getLogger(__name__)
@@ -66,3 +66,23 @@ class VectorDB:
                 results.append(self.nodes[idx])
         
         return results
+
+    def find_similar_node(self, new_node: Dict[str, Any], threshold: float = 0.92) -> Optional[Dict[str, Any]]:
+        """Finds an existing node that has a cosine similarity above the threshold."""
+        if not self.nodes:
+            return None
+        representation = f"Name: {new_node.get('name')}. Type: {new_node.get('type')}. Attributes: {new_node.get('attributes', {})}"
+        try:
+            new_emb = np.array(self._get_embedding(representation))
+        except Exception as e:
+            logger.error(f"Failed to embed node for similarity check: {e}")
+            return None
+
+        for idx, emb in enumerate(self.embeddings):
+            dot_prod = np.dot(new_emb, emb)
+            norm_new = np.linalg.norm(new_emb)
+            norm_emb = np.linalg.norm(emb)
+            sim = dot_prod / (norm_new * norm_emb) if (norm_new > 0 and norm_emb > 0) else 0.0
+            if sim >= threshold:
+                return self.nodes[idx]
+        return None

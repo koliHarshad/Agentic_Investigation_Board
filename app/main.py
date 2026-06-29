@@ -3,6 +3,7 @@ import json
 import logging
 import uuid
 import sys
+import re
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -18,7 +19,7 @@ from app.config import (
     RETRY_MAX_ATTEMPTS,
     RETRY_BASE_DELAY_SECONDS,
 )
-from app.utils import clean_document_text
+from app.utils import clean_document_text, with_retry
 from app.vector_db import VectorDB
 from app.graph_store import GraphStore
 from app.agent import (
@@ -49,6 +50,8 @@ app.add_middleware(
 from google.adk.runners import InMemoryRunner
 from google.genai import types
 
+# Wrap with with_retry decorator to absorb rate limit errors on the ADK runner
+@with_retry(max_retries=RETRY_MAX_ATTEMPTS, base_delay=RETRY_BASE_DELAY_SECONDS)
 async def run_llm_agent(agent, prompt: str, session_id: str) -> tuple[str, any]:
     """Runs an ADK agent with a prompt and returns (raw_text, structured_output)."""
     runner = InMemoryRunner(agent=agent)
@@ -142,8 +145,22 @@ Draft the focused planning objectives for this round.
             # Enforce sequential LLM call delay
             await asyncio.sleep(LLM_CALL_DELAY_SECONDS)
             
+            # Robust parsing of status from free-text Orchestrator plan using regex
+            status_match = re.search(r"Status:\s*(COMPLETE|RESEARCH)", orchestrator_plan, re.IGNORECASE)
+            status = "COMPLETE"
+            if status_match:
+                status = status_match.group(1).upper()
+            else:
+                # Fallback to robust substring search
+                if "COMPLETE" in orchestrator_plan.upper():
+                    status = "COMPLETE"
+                elif "RESEARCH" in orchestrator_plan.upper():
+                    status = "RESEARCH"
+            
+            logger.info(f"Orchestrator status parsed: {status}")
+            
             # Check if complete or if we've hit the round limit
-            if "COMPLETE" in orchestrator_plan or round_count >= MAX_RESEARCH_ROUNDS:
+            if status == "COMPLETE" or round_count >= MAX_RESEARCH_ROUNDS:
                 investigation_status = "COMPLETE"
                 break
                 
@@ -254,7 +271,7 @@ Follow the Pydantic schema strictly. Tag each extracted entity with the source_d
                         "source_snippet": node_obj.source_snippet
                     }
                     
-                    # Deduplicate node by case-insensitive name match
+                    # 1. Base deduplication by case-insensitive name match
                     normalized_name = node["name"].lower().strip()
                     existing_id = None
                     for existing_node in graph_store.nodes.values():
@@ -262,6 +279,13 @@ Follow the Pydantic schema strictly. Tag each extracted entity with the source_d
                             existing_id = existing_node["id"]
                             break
                             
+                    # 2. Advanced deduplication using vector similarity threshold (> 0.92)
+                    if not existing_id:
+                        similar_node = vector_db.find_similar_node(node, threshold=0.92)
+                        if similar_node:
+                            existing_id = similar_node["id"]
+                            logger.info(f"Advanced deduplication: merged '{node['name']}' with existing '{similar_node['name']}' (ID: {existing_id}) using similarity.")
+                    
                     if existing_id:
                         logger.info(f"Node '{node['name']}' already exists on board (merged ID: {existing_id}).")
                         continue
