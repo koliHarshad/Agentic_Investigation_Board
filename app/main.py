@@ -263,7 +263,7 @@ Write only the queries, one per line. No extra explanation.
                 })
                 
                 # Fetch docs via Tavily
-                results = await search_tavily(search_q, max_results=10)
+                results = await search_tavily(search_q, max_results=3)
                 
                 for r in results:
                     if total_docs_fetched >= MAX_TOTAL_DOCUMENTS:
@@ -320,7 +320,11 @@ Follow the Pydantic schema strictly. Tag each extracted entity with the source_d
                     continue
                 
                 # Process each extracted node
+                new_nodes_added_this_round = 0
                 for node_obj in extracted_data.nodes:
+                    if new_nodes_added_this_round >= 3:
+                        logger.info("Cap of 3 new nodes per round reached. Skipping remaining extractions to conserve API quota.")
+                        break
                     node = {
                         "id": node_obj.id,
                         "type": node_obj.type,
@@ -353,6 +357,7 @@ Follow the Pydantic schema strictly. Tag each extracted entity with the source_d
                     graph_store.add_node(node)
                     vector_db.add_node(node)
                     known_entities_names.append(node["name"])
+                    new_nodes_added_this_round += 1
                     
                     # Stream node to UI
                     await websocket.send_json({"type": "node_added", "data": node})
