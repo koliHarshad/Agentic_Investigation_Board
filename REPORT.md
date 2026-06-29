@@ -10,7 +10,10 @@ We ran several validation and end-to-end demo runs. Due to tight API quotas on f
 1. **Initial Run (Bug Detection)**: The Extractor agent processed documents but returned warning messages indicating `Extractor returned invalid or empty data`. Because of this, the Merger phase was skipped entirely, and the frontend graph canvas remained blank.
 2. **Structured Output Troubleshooting**: We ran an isolated test script (`test_extractor.py`) which revealed that the ADK (Agent Development Kit) Runner does not populate `event.output` directly during streaming event ticks; instead, it stores the parsed Pydantic object in the state delta (`event.actions.state_delta`).
 3. **Embedding API Troubleshooting**: Inspecting the uvicorn logs revealed a `404 NOT_FOUND` error on the `"text-embedding-004"` model. Because embedding generation failed, the Vector DB could not calculate similarity scores, preventing the Merger from judging connections.
-4. **Final Run (Optimized)**: We resolved the parsing issues, updated the embedding model, switched the core models to the stable 1.5 flash generation, and capped the document search and entity extraction counts to prevent rate limits.
+4. **Final Run (Optimized & Verified)**: We switched models to verified active endpoints and ran isolated tests:
+   * **Embedding Model**: `"gemini-embedding-001"` successfully generated vectors in isolation.
+   * **Text Generation Model**: `"gemini-flash-lite-latest"` bypassed the server-side 503 demand spikes currently affecting the standard `"gemini-flash-latest"` endpoint.
+   * **Merger Isolation Test**: Confirmed that the Merger correctly queries the Vector DB using the embedding model and outputs relationship connections matching the required schema.
 
 ---
 
@@ -24,11 +27,11 @@ To resolve the errors above and ensure robust performance, we applied the follow
 
 ### B. Embedding Model Correction
 * **File Modified**: `app/vector_db.py`
-* **Description**: Switched the embedding model from `"text-embedding-004"` (which threw a 404 error on the developer API key) to **`"gemini-embedding-2"`**, which is the active and supported embedding model.
+* **Description**: Switched the embedding model to **`"gemini-embedding-001"`**, which is the active and supported stable text embedding model on the Gemini API.
 
 ### C. Stable Model Mapping Compatibility
 * **File Modified**: `app/agent.py`
-* **Description**: Configured all 5 agents (Orchestrator, Researcher, Extractor, Merger, and Narrator) to run on **`"gemini-flash-latest"`** (representing 1.5-flash). This model generation supports high daily caps (1,500 requests/day) on the free tier compared to the newer 2.5 models which are restricted to 20 requests/day.
+* **Description**: Configured all 5 agents (Orchestrator, Researcher, Extractor, Merger, and Narrator) to run on **`"gemini-flash-lite-latest"`** (representing 1.5-flash-8b). This model family is fully responsive (bypassing current 503 overload errors) while offering the high 1,500 requests/day free tier quota.
 
 ### D. Rate-Limit & Quota Protection Limits
 * **Files Modified**: `app/config.py`, `app/main.py`
