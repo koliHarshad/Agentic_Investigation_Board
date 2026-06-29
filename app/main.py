@@ -58,6 +58,33 @@ from app.tools import search_tavily, search_opensanctions
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger("main")
 
+
+# ==================== ADK Dict Wrappers for Structured Outputs ====================
+
+class ExtractorNodeWrapper:
+    def __init__(self, node_dict):
+        self.id = node_dict.get("id")
+        self.type = node_dict.get("type")
+        self.name = node_dict.get("name")
+        self.attributes = node_dict.get("attributes", {})
+        self.source_document_id = node_dict.get("source_document_id")
+        self.source_snippet = node_dict.get("source_snippet")
+
+class ExtractorDictWrapper:
+    def __init__(self, data_dict):
+        self.nodes = [ExtractorNodeWrapper(n) for n in data_dict.get("nodes", [])]
+
+class MergerConnectionWrapper:
+    def __init__(self, conn_dict):
+        self.target_node_id = conn_dict.get("target_node_id")
+        self.relationship_type = conn_dict.get("relationship_type")
+        self.confidence = conn_dict.get("confidence")
+        self.reasoning = conn_dict.get("reasoning")
+
+class MergerDictWrapper:
+    def __init__(self, data_dict):
+        self.connections = [MergerConnectionWrapper(c) for c in data_dict.get("connections", [])]
+
 app = FastAPI(title="Agentic Investigation Board API")
 
 # Enable CORS for frontend integration
@@ -99,8 +126,17 @@ async def run_llm_agent(agent, prompt: str, session_id: str) -> tuple[str, any]:
             for part in event.content.parts:
                 if part.text:
                     raw_text += part.text
-        if event.output is not None:
-            structured_output = event.output
+        # Retrieve parsed schema from ADK state delta actions
+        if event.actions and event.actions.state_delta:
+            for key, val in event.actions.state_delta.items():
+                structured_output = val
+                
+    # Wrap raw dicts into helper wrappers for downstream attribute access (.nodes, .connections)
+    if structured_output is not None and isinstance(structured_output, dict):
+        if "nodes" in structured_output:
+            structured_output = ExtractorDictWrapper(structured_output)
+        elif "connections" in structured_output:
+            structured_output = MergerDictWrapper(structured_output)
             
     return raw_text, structured_output
 
