@@ -6,11 +6,7 @@ import {
   Activity, 
   BookOpen, 
   FileText, 
-  AlertTriangle,
-  Play,
-  RotateCcw,
-  PlusCircle,
-  HelpCircle
+  AlertTriangle
 } from 'lucide-react';
 
 const NODE_COLORS = {
@@ -65,7 +61,6 @@ export default function App() {
     wsRef.current = ws;
 
     ws.onopen = () => {
-      // Send the query
       ws.send(JSON.stringify({ query: query }));
       setStatusLogs(prev => [...prev, 'Connected to server. Initiating investigation pipeline...']);
     };
@@ -85,7 +80,6 @@ export default function App() {
           break;
         case 'node_added':
           setGraphData(prev => {
-            // Avoid duplicate rendering
             if (prev.nodes.some(n => n.id === msg.data.id)) return prev;
             return {
               ...prev,
@@ -96,7 +90,6 @@ export default function App() {
           break;
         case 'edge_added':
           setGraphData(prev => {
-            // Avoid duplicate links
             const exists = prev.links.some(
               l => (l.source === msg.data.source && l.target === msg.data.target) ||
                    (l.source === msg.data.target && l.target === msg.data.source)
@@ -139,7 +132,6 @@ export default function App() {
     };
   };
 
-  // Customized premium lighter Node canvas drawings
   const paintNode = useCallback((node, ctx, globalScale) => {
     const label = node.name;
     const fontSize = 11 / globalScale;
@@ -164,48 +156,48 @@ export default function App() {
     // Draw text label centered below node
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillStyle = '#0f172a'; // slate-900
+    ctx.fillStyle = '#0f172a';
     ctx.fillText(label, node.x, node.y + r + 7);
   }, []);
 
   return (
-    <div className="flex flex-col h-screen w-screen bg-[#f8fafc] text-[#1e293b] font-sans overflow-hidden">
+    <div className="app-container">
       {/* Header bar */}
-      <header className="flex items-center justify-between px-6 py-4 bg-white border-b border-[#e2e8f0] shadow-sm z-10">
-        <div className="flex items-center space-x-3">
-          <div className="p-2 bg-[#fee2e2] text-[#ef4444] rounded-lg">
-            <Activity className="h-6 w-6 animate-pulse-slow" />
+      <header className="header-bar">
+        <div className="logo-section">
+          <div className="logo-icon-wrapper">
+            <Activity className="h-6 w-6" style={{ animation: 'pulse-slow 3s infinite ease-in-out' }} />
           </div>
-          <div>
-            <h1 className="text-xl font-bold tracking-tight text-[#0f172a] m-0">Agentic Investigation Board</h1>
-            <p className="text-xs text-[#64748b] m-0">Autonomous multi-agent correlation mapping engine</p>
+          <div className="title-group">
+            <h1>Agentic Investigation Board</h1>
+            <p>Autonomous multi-agent correlation mapping engine</p>
           </div>
         </div>
         
-        <div className="flex items-center space-x-4">
+        <div className="header-right">
           {isInvestigating && (
-            <div className="flex items-center space-x-2 px-3 py-1 bg-blue-50 text-blue-700 rounded-full text-xs font-semibold">
-              <span className="h-2 w-2 bg-blue-500 rounded-full animate-ping"></span>
+            <div className="status-indicator">
+              <span className="status-dot"></span>
               <span>Running round sequence...</span>
             </div>
           )}
-          <span className="text-xs text-[#94a3b8]">Capstone Submission v1.0</span>
+          <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>Capstone Submission v1.0</span>
         </div>
       </header>
 
       {/* Main Workspace split */}
-      <div className="flex flex-1 overflow-hidden">
+      <div className="workspace">
         {/* Left Side: Controller, Chat Logs & Narrative */}
-        <div className="w-1/3 flex flex-col border-r border-[#e2e8f0] bg-white overflow-hidden">
+        <div className="left-panel">
           
           {/* Query input panel */}
-          <div className="p-4 border-b border-[#e2e8f0] bg-[#f8fafc]">
-            <label className="block text-xs font-bold text-[#475569] uppercase tracking-wider mb-2">Investigate Prompt</label>
-            <div className="relative flex items-center">
+          <div className="query-panel">
+            <label className="panel-label">Investigate Prompt</label>
+            <div className="input-container">
               <input
                 type="text"
                 placeholder="e.g. Investigate the collapse of Enron..."
-                className="w-full pl-3 pr-10 py-2.5 bg-white border border-[#cbd5e1] rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 text-sm shadow-sm transition-all"
+                className="query-input"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleStartInvestigation()}
@@ -214,37 +206,37 @@ export default function App() {
               <button
                 onClick={handleStartInvestigation}
                 disabled={isInvestigating || !query.trim()}
-                className="absolute right-1.5 p-1.5 bg-[#ef4444] hover:bg-[#dc2626] text-white disabled:bg-[#cbd5e1] rounded-lg transition-all"
+                className="send-btn"
               >
-                <Send className="h-4 w-4" />
+                <Send className="h-4 w-4" style={{ width: '16px', height: '16px' }} />
               </button>
             </div>
             
             {errorMsg && (
-              <div className="mt-3 flex items-start space-x-2 p-2.5 bg-[#fef2f2] text-[#b91c1c] text-xs rounded-lg border border-[#fecaca]">
-                <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+              <div className="error-banner">
+                <AlertTriangle className="h-4 w-4" style={{ width: '16px', height: '16px', flexShrink: 0 }} />
                 <span>{errorMsg}</span>
               </div>
             )}
           </div>
 
           {/* Tabbed view: Logs & Narratives */}
-          <div className="flex-1 flex flex-col min-h-0">
+          <div className="list-wrapper">
             {/* Live Progress Logs */}
-            <div className="flex-1 flex flex-col p-4 border-b border-[#e2e8f0] overflow-hidden">
-              <div className="flex items-center space-x-2 mb-2">
-                <Search className="h-4 w-4 text-[#64748b]" />
-                <h3 className="text-xs font-bold text-[#475569] uppercase tracking-wider m-0">Investigation Logs</h3>
+            <div className="logs-section">
+              <div className="section-title">
+                <Search className="h-4 w-4" style={{ width: '16px', height: '16px', color: '#64748b' }} />
+                <h3>Investigation Logs</h3>
               </div>
-              <div className="flex-1 bg-[#fafafa] border border-[#e2e8f0] rounded-xl p-3 overflow-y-auto text-xs font-mono text-[#334155] space-y-2">
+              <div className="logs-box">
                 {statusLogs.length === 0 ? (
-                  <div className="text-center text-[#94a3b8] py-8">
+                  <div style={{ textAlign: 'center', color: '#94a3b8', padding: '32px 0' }}>
                     Enter a query above to start the sequential loop
                   </div>
                 ) : (
                   statusLogs.map((log, idx) => (
-                    <div key={idx} className="border-b border-[#f1f5f9] pb-1">
-                      <span className="text-[#94a3b8] mr-2">[{new Date().toLocaleTimeString()}]</span>
+                    <div key={idx} className="log-entry">
+                      <span className="log-time">[{new Date().toLocaleTimeString()}]</span>
                       <span>{log}</span>
                     </div>
                   ))
@@ -254,18 +246,18 @@ export default function App() {
             </div>
 
             {/* Final Case Narrative Panel */}
-            <div className="h-2/5 flex flex-col p-4 overflow-hidden">
-              <div className="flex items-center space-x-2 mb-2">
-                <FileText className="h-4 w-4 text-[#64748b]" />
-                <h3 className="text-xs font-bold text-[#475569] uppercase tracking-wider m-0">Final Narrative Report</h3>
+            <div className="narrative-section">
+              <div className="section-title">
+                <FileText className="h-4 w-4" style={{ width: '16px', height: '16px', color: '#64748b' }} />
+                <h3>Final Narrative Report</h3>
               </div>
-              <div className="flex-1 bg-[#fefefe] border border-[#e2e8f0] rounded-xl p-3 overflow-y-auto text-sm text-[#334155] leading-relaxed">
+              <div className="narrative-box">
                 {narrative ? (
-                  <div className="markdown-body whitespace-pre-line">
+                  <div style={{ whitespace: 'pre-line' }}>
                     {narrative}
                   </div>
                 ) : (
-                  <div className="text-center text-[#94a3b8] py-8 text-xs font-mono">
+                  <div style={{ textAlign: 'center', color: '#94a3b8', padding: '32px 0', fontSize: '0.75rem', fontFamily: 'monospace' }}>
                     {isInvestigating ? 'Awaiting loop completion...' : 'Final narrative report will appear here.'}
                   </div>
                 )}
@@ -275,25 +267,27 @@ export default function App() {
         </div>
 
         {/* Right Side: The Force Directed Evidence Board */}
-        <div className="flex-1 flex flex-col bg-white relative">
+        <div className="right-panel">
           {/* Subheading overlays */}
-          <div className="absolute top-4 left-4 z-10 flex flex-col space-y-2 pointer-events-none">
-            <div className="glass-panel px-4 py-2 flex items-center space-x-2 pointer-events-auto">
-              <BookOpen className="h-4 w-4 text-[#ef4444]" />
-              <span className="text-xs font-bold text-[#0f172a]">Active Evidence Board (Light Theme)</span>
+          <div className="plan-overlay">
+            <div className="glass-panel overlay-card" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <BookOpen className="h-4 w-4" style={{ width: '16px', height: '16px', color: '#ef4444' }} />
+              <span style={{ fontSize: '0.75rem', fontWeight: '700', color: '#0f172a' }}>Active Evidence Board (Light Theme)</span>
             </div>
             
             {orchestratorPlan && (
-              <div className="glass-panel p-3 max-w-sm pointer-events-auto shadow-sm">
-                <span className="text-[10px] font-bold text-[#64748b] uppercase tracking-wider">Current Plan</span>
-                <p className="text-xs text-[#334155] mt-1 line-clamp-3 leading-normal">{orchestratorPlan}</p>
+              <div className="glass-panel overlay-card">
+                <span className="overlay-label">Current Plan</span>
+                <p className="overlay-content" style={{ display: '-webkit-box', WebkitLineClamp: 4, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                  {orchestratorPlan}
+                </p>
               </div>
             )}
             
             {researchQueries.length > 0 && (
-              <div className="glass-panel p-3 pointer-events-auto">
-                <span className="text-[10px] font-bold text-[#64748b] uppercase tracking-wider">Active Queries</span>
-                <ul className="text-xs text-[#334155] mt-1 pl-4 list-disc space-y-0.5">
+              <div className="glass-panel overlay-card">
+                <span className="overlay-label">Active Queries</span>
+                <ul style={{ fontSize: '0.75rem', color: '#334155', margin: '4px 0 0 0', paddingLeft: '16px' }}>
                   {researchQueries.map((q, idx) => (
                     <li key={idx}>{q}</li>
                   ))}
@@ -302,35 +296,35 @@ export default function App() {
             )}
           </div>
 
-          {/* Colored Node Legend overlay (bottom left) */}
-          <div className="absolute bottom-4 left-4 z-10 glass-panel p-3 flex flex-col space-y-1.5 shadow-sm text-xs select-none">
-            <span className="font-bold text-[#475569] uppercase text-[10px] tracking-wider mb-0.5">Legend</span>
-            <div className="flex items-center space-x-2">
-              <span className="h-3 w-3 rounded-full" style={{ backgroundColor: NODE_COLORS.person }}></span>
+          {/* Colored Node Legend overlay */}
+          <div className="glass-panel legend-overlay">
+            <span style={{ fontWeight: '700', color: '#475569', fontSize: '0.6rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Legend</span>
+            <div className="legend-item">
+              <span className="legend-color" style={{ backgroundColor: NODE_COLORS.person }}></span>
               <span>Person</span>
             </div>
-            <div className="flex items-center space-x-2">
-              <span className="h-3 w-3 rounded-full" style={{ backgroundColor: NODE_COLORS.organization }}></span>
+            <div className="legend-item">
+              <span className="legend-color" style={{ backgroundColor: NODE_COLORS.organization }}></span>
               <span>Organization</span>
             </div>
-            <div className="flex items-center space-x-2">
-              <span className="h-3 w-3 rounded-full" style={{ backgroundColor: NODE_COLORS.event }}></span>
+            <div className="legend-item">
+              <span className="legend-color" style={{ backgroundColor: NODE_COLORS.event }}></span>
               <span>Event</span>
             </div>
-            <div className="flex items-center space-x-2">
-              <span className="h-3 w-3 rounded-full" style={{ backgroundColor: NODE_COLORS.location }}></span>
+            <div className="legend-item">
+              <span className="legend-color" style={{ backgroundColor: NODE_COLORS.location }}></span>
               <span>Location</span>
             </div>
-            <div className="flex items-center space-x-2">
-              <span className="h-3 w-3 rounded-full" style={{ backgroundColor: NODE_COLORS.financial_instrument }}></span>
+            <div className="legend-item">
+              <span className="legend-color" style={{ backgroundColor: NODE_COLORS.financial_instrument }}></span>
               <span>Financial Instrument</span>
             </div>
           </div>
 
           {/* The canvas force-directed graph renderer */}
-          <div className="flex-1 h-full w-full">
+          <div className="graph-canvas-container">
             {graphData.nodes.length === 0 ? (
-              <div className="h-full w-full flex items-center justify-center bg-[#f8fafc] text-[#94a3b8] text-sm">
+              <div className="empty-graph-state">
                 No active entities on the board. Start an investigation to draw the board.
               </div>
             ) : (
@@ -338,7 +332,6 @@ export default function App() {
                 ref={graphRef}
                 graphData={graphData}
                 nodeCanvasObject={paintNode}
-                // Red-string drawing
                 linkColor={() => '#ef4444'} 
                 linkWidth={(link) => (link.confidence ? link.confidence * 3.5 : 2)}
                 linkLabel={(link) => `${link.type} (confidence: ${(link.confidence * 100).toFixed(0)}%)`}
