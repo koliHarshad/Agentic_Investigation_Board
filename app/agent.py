@@ -46,21 +46,21 @@ def load_skill_instruction(skill_path: str) -> str:
 # 1. Orchestrator
 orchestrator_agent = Agent(
     name="orchestrator",
-    model="gemini-flash-lite-latest",
+    model="gemini-3.1-flash-lite",
     instruction=load_skill_instruction('.agents/skills/orchestrator-skill/SKILL.md')
 )
 
 # 2. Researcher
 researcher_agent = Agent(
     name="researcher",
-    model="gemini-flash-lite-latest",
+    model="gemini-3.1-flash-lite",
     instruction=load_skill_instruction('.agents/skills/researcher-skill/SKILL.md')
 )
 
 # 3. Extractor
 extractor_agent = Agent(
     name="extractor",
-    model="gemini-flash-lite-latest",
+    model="gemini-3.1-flash-lite",
     instruction=load_skill_instruction('.agents/skills/extractor-skill/SKILL.md'),
     output_schema=ExtractorOutput,
     output_key="extracted_nodes"
@@ -69,7 +69,7 @@ extractor_agent = Agent(
 # 4. Merger
 merger_agent = Agent(
     name="merger",
-    model="gemini-flash-lite-latest",
+    model="gemini-3.1-flash-lite",
     instruction=load_skill_instruction('.agents/skills/merger-skill/SKILL.md'),
     output_schema=MergerOutput,
     output_key="judged_connections"
@@ -78,6 +78,6 @@ merger_agent = Agent(
 # 5. Narrator
 narrator_agent = Agent(
     name="narrator",
-    model="gemini-flash-lite-latest",
+    model="gemini-3.1-flash-lite",
     instruction=load_skill_instruction('.agents/skills/narrator-skill/SKILL.md')
 )

@@ -10,9 +10,12 @@ We ran several validation and end-to-end demo runs. Due to tight API quotas on f
 1. **Initial Run (Bug Detection)**: The Extractor agent processed documents but returned warning messages indicating `Extractor returned invalid or empty data`. Because of this, the Merger phase was skipped entirely, and the frontend graph canvas remained blank.
 2. **Structured Output Troubleshooting**: We ran an isolated test script (`test_extractor.py`) which revealed that the ADK (Agent Development Kit) Runner does not populate `event.output` directly during streaming event ticks; instead, it stores the parsed Pydantic object in the state delta (`event.actions.state_delta`).
 3. **Embedding API Troubleshooting**: Inspecting the uvicorn logs revealed a `404 NOT_FOUND` error on the `"text-embedding-004"` model. Because embedding generation failed, the Vector DB could not calculate similarity scores, preventing the Merger from judging connections.
-4. **Final Run (Optimized & Verified)**: We switched models to verified active endpoints and ran isolated tests:
+4. **Final Run (Optimized & Verified)**: We switched models to verified active, explicitly version-pinned endpoints:
    * **Embedding Model**: `"gemini-embedding-001"` successfully generated vectors in isolation.
-   * **Text Generation Model**: `"gemini-flash-lite-latest"` bypassed the server-side 503 demand spikes currently affecting the standard `"gemini-flash-latest"` endpoint.
+   * **Text Generation Model**: `"gemini-3.1-flash-lite"` was chosen after verifying in isolation that:
+     1. It successfully executes generation calls without rate limits (unlike 2.0/2.5 daily 20-request caps).
+     2. It bypasses current 503 load spike failures affecting the `"gemini-flash-latest"` endpoint.
+     3. Using this explicit, pinned model name instead of the `"-latest"` alias prevents surprise model rotations on judging day.
    * **Merger Isolation Test**: Confirmed that the Merger correctly queries the Vector DB using the embedding model and outputs relationship connections matching the required schema.
 
 ---
@@ -31,7 +34,7 @@ To resolve the errors above and ensure robust performance, we applied the follow
 
 ### C. Stable Model Mapping Compatibility
 * **File Modified**: `app/agent.py`
-* **Description**: Configured all 5 agents (Orchestrator, Researcher, Extractor, Merger, and Narrator) to run on **`"gemini-flash-lite-latest"`** (representing 1.5-flash-8b). This model family is fully responsive (bypassing current 503 overload errors) while offering the high 1,500 requests/day free tier quota.
+* **Description**: Configured all 5 agents (Orchestrator, Researcher, Extractor, Merger, and Narrator) to run on the explicitly version-pinned **`"gemini-3.1-flash-lite"`** model. This offers high free-tier daily quotas (1,500 requests/day) and prevents surprise rotation changes.
 
 ### D. Rate-Limit & Quota Protection Limits
 * **Files Modified**: `app/config.py`, `app/main.py`
