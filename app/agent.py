@@ -41,22 +41,23 @@ def load_skill_instruction(skill_path: str) -> str:
 
 
 # ==================== Agent Definitions ====================
+# We use gemini-2.5-flash for all agents to ensure fast execution and avoid the 0-quota pro tier limit.
 
-# 1. Orchestrator (Upgraded to gemini-2.5-pro)
+# 1. Orchestrator
 orchestrator_agent = Agent(
     name="orchestrator",
-    model="gemini-2.5-pro",
+    model="gemini-2.5-flash",
     instruction=load_skill_instruction('.agents/skills/orchestrator-skill/SKILL.md')
 )
 
-# 2. Researcher (Upgraded to gemini-2.5-flash)
+# 2. Researcher
 researcher_agent = Agent(
     name="researcher",
     model="gemini-2.5-flash",
     instruction=load_skill_instruction('.agents/skills/researcher-skill/SKILL.md')
 )
 
-# 3. Extractor (Upgraded to gemini-2.5-flash)
+# 3. Extractor
 extractor_agent = Agent(
     name="extractor",
     model="gemini-2.5-flash",
@@ -65,7 +66,7 @@ extractor_agent = Agent(
     output_key="extracted_nodes"
 )
 
-# 4. Merger (Upgraded to gemini-2.5-flash)
+# 4. Merger
 merger_agent = Agent(
     name="merger",
     model="gemini-2.5-flash",
@@ -74,9 +75,9 @@ merger_agent = Agent(
     output_key="judged_connections"
 )
 
-# 5. Narrator (Upgraded to gemini-2.5-pro)
+# 5. Narrator
 narrator_agent = Agent(
     name="narrator",
-    model="gemini-2.5-pro",
+    model="gemini-2.5-flash",
     instruction=load_skill_instruction('.agents/skills/narrator-skill/SKILL.md')
 )
