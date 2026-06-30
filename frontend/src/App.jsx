@@ -122,7 +122,9 @@ export default function App() {
     // If it's a completely new session (no active query yet), reset everything
     if (!activeQuery) {
       setActiveQuery(query);
-      setStatusLogs([]);
+      setStatusLogs([
+        { type: 'user', text: query }
+      ]);
       setOrchestratorPlan('');
       setResearchQueries([]);
       setGraphData({ nodes: [], links: [] });
@@ -139,7 +141,7 @@ export default function App() {
 
       ws.onopen = () => {
         ws.send(JSON.stringify({ query: query }));
-        setStatusLogs(prev => [...prev, 'Connected to correlation engine. Initiating multi-agent pipeline...']);
+        setStatusLogs(prev => [...prev, { type: 'status', text: 'Connected to correlation engine. Initiating multi-agent pipeline...' }]);
       };
 
       ws.onmessage = (event) => {
@@ -147,7 +149,7 @@ export default function App() {
         
         switch (msg.type) {
           case 'status':
-            setStatusLogs(prev => [...prev, msg.data]);
+            setStatusLogs(prev => [...prev, { type: 'status', text: msg.data }]);
             break;
           case 'orchestrator_plan':
             setOrchestratorPlan(msg.data);
@@ -169,7 +171,7 @@ export default function App() {
                 nodes: [...prev.nodes, msg.data]
               };
             });
-            setStatusLogs(prev => [...prev, `[Clue Extracted] Found node: ${msg.data.name} (${msg.data.type})`]);
+            setStatusLogs(prev => [...prev, { type: 'node', text: `[Clue Extracted] Found node: ${msg.data.name} (${msg.data.type})` }]);
             break;
           case 'edge_added':
             setGraphData(prev => {
@@ -183,13 +185,13 @@ export default function App() {
                 links: [...prev.links, msg.data]
               };
             });
-            setStatusLogs(prev => [...prev, `[Connection Judged] Added relationship: ${msg.data.source} ↔ ${msg.data.target} (${msg.data.type})`]);
+            setStatusLogs(prev => [...prev, { type: 'edge', text: `[Connection Judged] Added relationship: ${msg.data.source} ↔ ${msg.data.target} (${msg.data.type})` }]);
             break;
           case 'narrative':
             setNarrative(msg.data);
             break;
           case 'complete':
-            setStatusLogs(prev => [...prev, 'Investigation sequence completed. Final story rendered.']);
+            setStatusLogs(prev => [...prev, { type: 'status', text: 'Investigation sequence completed. Final story rendered.' }]);
             setIsInvestigating(false);
             setTimeout(() => {
               if (graphRef.current) {
@@ -199,7 +201,7 @@ export default function App() {
             break;
           case 'error':
             setErrorMsg(msg.data);
-            setStatusLogs(prev => [...prev, `[Error] ${msg.data}`]);
+            setStatusLogs(prev => [...prev, { type: 'error', text: msg.data }]);
             setIsInvestigating(false);
             break;
           default:
@@ -218,7 +220,7 @@ export default function App() {
       };
     } else {
       // It is a follow-up query in the same active session!
-      setStatusLogs(prev => [...prev, `[Follow-up Query] ${query}`]);
+      setStatusLogs(prev => [...prev, { type: 'user', text: query }]);
       
       if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
         wsRef.current.send(JSON.stringify({ query: query }));
@@ -229,14 +231,14 @@ export default function App() {
         
         ws.onopen = () => {
           ws.send(JSON.stringify({ query: query }));
-          setStatusLogs(prev => [...prev, 'Reconnected to correlation engine. Resuming investigation...']);
+          setStatusLogs(prev => [...prev, { type: 'status', text: 'Reconnected to correlation engine. Resuming investigation...' }]);
         };
         
         ws.onmessage = (event) => {
           const msg = JSON.parse(event.data);
           switch (msg.type) {
             case 'status':
-              setStatusLogs(prev => [...prev, msg.data]);
+              setStatusLogs(prev => [...prev, { type: 'status', text: msg.data }]);
               break;
             case 'orchestrator_plan':
               setOrchestratorPlan(msg.data);
@@ -258,7 +260,7 @@ export default function App() {
                   nodes: [...prev.nodes, msg.data]
                 };
               });
-              setStatusLogs(prev => [...prev, `[Clue Extracted] Found node: ${msg.data.name} (${msg.data.type})`]);
+              setStatusLogs(prev => [...prev, { type: 'node', text: `[Clue Extracted] Found node: ${msg.data.name} (${msg.data.type})` }]);
               break;
             case 'edge_added':
               setGraphData(prev => {
@@ -272,13 +274,13 @@ export default function App() {
                   links: [...prev.links, msg.data]
                 };
               });
-              setStatusLogs(prev => [...prev, `[Connection Judged] Added relationship: ${msg.data.source} ↔ ${msg.data.target} (${msg.data.type})`]);
+              setStatusLogs(prev => [...prev, { type: 'edge', text: `[Connection Judged] Added relationship: ${msg.data.source} ↔ ${msg.data.target} (${msg.data.type})` }]);
               break;
             case 'narrative':
               setNarrative(msg.data);
               break;
             case 'complete':
-              setStatusLogs(prev => [...prev, 'Investigation sequence completed. Final story rendered.']);
+              setStatusLogs(prev => [...prev, { type: 'status', text: 'Investigation sequence completed. Final story rendered.' }]);
               setIsInvestigating(false);
               setTimeout(() => {
                 if (graphRef.current) {
@@ -288,7 +290,7 @@ export default function App() {
               break;
             case 'error':
               setErrorMsg(msg.data);
-              setStatusLogs(prev => [...prev, `[Error] ${msg.data}`]);
+              setStatusLogs(prev => [...prev, { type: 'error', text: msg.data }]);
               setIsInvestigating(false);
               break;
             default:
@@ -433,7 +435,7 @@ export default function App() {
 
           {/* Combined Scrollable Chat Interface */}
           <div className="chat-log-box">
-            {statusLogs.length === 0 && !activeQuery ? (
+            {statusLogs.length === 0 ? (
               <div className="empty-chat-state">
                 <Search className="empty-icon" />
                 <p>Awaiting investigation query...</p>
@@ -441,28 +443,26 @@ export default function App() {
               </div>
             ) : (
               <div className="chat-flow-container">
-                {/* User Prompt Message Bubble */}
-                {activeQuery && (
-                  <div className="chat-bubble user-bubble">
-                    <div className="bubble-label">Scenario Query</div>
-                    <div className="bubble-text">{activeQuery}</div>
-                  </div>
-                )}
-
-                {/* Status Log Bubbles */}
+                {/* Unified chat rendering of queries and logs in chronological order */}
                 {statusLogs.map((log, idx) => {
-                  let isNode = log.includes('[Clue Extracted]');
-                  let isConnection = log.includes('[Connection Judged]');
-                  let isError = log.includes('[Error]');
+                  if (log.type === 'user') {
+                    return (
+                      <div key={idx} className="chat-bubble user-bubble">
+                        <div className="bubble-label">Scenario Query</div>
+                        <div className="bubble-text">{log.text}</div>
+                      </div>
+                    );
+                  }
+
                   let bubbleClass = "chat-bubble status-bubble";
-                  if (isNode) bubbleClass += " node-bubble";
-                  if (isConnection) bubbleClass += " connection-bubble";
-                  if (isError) bubbleClass += " error-bubble";
+                  if (log.type === 'node') bubbleClass += " node-bubble";
+                  if (log.type === 'edge') bubbleClass += " connection-bubble";
+                  if (log.type === 'error') bubbleClass += " error-bubble";
 
                   return (
                     <div key={idx} className={bubbleClass}>
                       <span className="log-time">{new Date().toLocaleTimeString()}</span>
-                      <span className="log-text">{log}</span>
+                      <span className="log-text">{log.text}</span>
                     </div>
                   );
                 })}
