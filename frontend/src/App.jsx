@@ -9,10 +9,11 @@ import {
   AlertTriangle,
   ChevronDown,
   ChevronUp,
-  Maximize2,
   X,
   Compass,
-  Link2
+  Link2,
+  Book,
+  ChevronRight
 } from 'lucide-react';
 
 const NODE_COLORS = {
@@ -40,6 +41,11 @@ export default function App() {
   const [isSummaryOpen, setIsSummaryOpen] = useState(false);
   const [hasNewSummary, setHasNewSummary] = useState(false);
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
+  
+  // Evidence Docs State
+  const [documents, setDocuments] = useState([]);
+  const [isDocsOpen, setIsDocsOpen] = useState(false);
+  const [expandedDocId, setExpandedDocId] = useState(null);
 
   const wsRef = useRef(null);
   const logsEndRef = useRef(null);
@@ -120,6 +126,9 @@ export default function App() {
     setErrorMsg('');
     setHasNewSummary(false);
     setIsSummaryOpen(false);
+    setDocuments([]);
+    setIsDocsOpen(false);
+    setExpandedDocId(null);
     setIsInvestigating(true);
 
     const ws = new WebSocket('ws://127.0.0.1:8000/ws/investigate');
@@ -142,6 +151,12 @@ export default function App() {
           break;
         case 'research_queries':
           setResearchQueries(msg.data);
+          break;
+        case 'documents_added':
+          setDocuments(prev => {
+            const newDocs = msg.data.filter(d => !prev.some(p => p.id === d.id));
+            return [...prev, ...newDocs];
+          });
           break;
         case 'node_added':
           setGraphData(prev => {
@@ -173,7 +188,7 @@ export default function App() {
         case 'complete':
           setStatusLogs(prev => [...prev, 'Investigation sequence completed. Final story rendered.']);
           setIsInvestigating(false);
-          // Wait a small bit for D3 simulation to settle, then fit to screen
+          // Wait for D3 simulation to settle
           setTimeout(() => {
             if (graphRef.current) {
               graphRef.current.zoomToFit(600, 80);
@@ -231,6 +246,64 @@ export default function App() {
     ctx.fillText(label, node.x, node.y + r + 8);
   }, []);
 
+  // --- Inline Markdown Parser Helper ---
+  const parseInline = (text) => {
+    if (!text) return '';
+    const parts = text.split(/(\*\*.*?\*\*)/g);
+    return parts.map((part, i) => {
+      if (part.startsWith('**') && part.endsWith('**')) {
+        return <strong key={i} style={{ color: '#0f172a', fontWeight: '700' }}>{part.slice(2, -2)}</strong>;
+      }
+      return part;
+    });
+  };
+
+  const renderMarkdown = (text) => {
+    if (!text) return null;
+    const lines = text.split('\n');
+    return lines.map((line, idx) => {
+      let trimmed = line.trim();
+      if (!trimmed) return <div key={idx} style={{ height: '8px' }}></div>;
+      
+      if (trimmed.startsWith('####')) {
+        return <h4 key={idx} className="md-h4">{parseInline(trimmed.replace(/^####\s*/, ''))}</h4>;
+      }
+      if (trimmed.startsWith('###')) {
+        return <h3 key={idx} className="md-h3">{parseInline(trimmed.replace(/^###\s*/, ''))}</h3>;
+      }
+      if (trimmed.startsWith('##')) {
+        return <h2 key={idx} className="md-h2">{parseInline(trimmed.replace(/^##\s*/, ''))}</h2>;
+      }
+      if (trimmed.startsWith('#')) {
+        return <h1 key={idx} className="md-h1">{parseInline(trimmed.replace(/^#\s*/, ''))}</h1>;
+      }
+      
+      if (trimmed.startsWith('-') || trimmed.startsWith('*')) {
+        return (
+          <li key={idx} className="md-li">
+            {parseInline(trimmed.replace(/^[-*]\s*/, ''))}
+          </li>
+        );
+      }
+      
+      const numMatch = trimmed.match(/^(\d+)\.\s*(.*)/);
+      if (numMatch) {
+        return (
+          <div key={idx} className="md-num-li">
+            <strong style={{ marginRight: '6px' }}>{numMatch[1]}.</strong>
+            <span>{parseInline(numMatch[2])}</span>
+          </div>
+        );
+      }
+      
+      return (
+        <p key={idx} className="md-p">
+          {parseInline(line)}
+        </p>
+      );
+    });
+  };
+
   return (
     <div className="app-container">
       {/* Header bar */}
@@ -252,7 +325,7 @@ export default function App() {
               <span>Correlating data...</span>
             </div>
           )}
-          <span style={{ fontSize: '0.75rem', color: '#94a3b8', fontWeight: '500' }}>Capstone Submission v1.1</span>
+          <span style={{ fontSize: '0.75rem', color: '#94a3b8', fontWeight: '500' }}>Capstone Submission v1.2</span>
         </div>
       </header>
 
@@ -342,7 +415,7 @@ export default function App() {
           {/* Top-Left Collapsible Plan Panel */}
           <div className="plan-overlay">
             <div className="glass-panel overlay-card toggle-card" onClick={() => setIsPlanCollapsed(!isPlanCollapsed)}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyBehavior: 'space-between', width: '100%' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <BookOpen className="h-4 w-4" style={{ width: '16px', height: '16px', color: '#ef4444' }} />
                   <span style={{ fontSize: '0.75rem', fontWeight: '700', color: '#0f172a' }}>
@@ -357,7 +430,9 @@ export default function App() {
                   {orchestratorPlan ? (
                     <div style={{ marginTop: '10px' }}>
                       <span className="overlay-label">Current Plan</span>
-                      <p className="overlay-content">{orchestratorPlan}</p>
+                      <div className="plan-markdown-body">
+                        {renderMarkdown(orchestratorPlan)}
+                      </div>
                     </div>
                   ) : (
                     <p className="overlay-content" style={{ marginTop: '8px', color: '#94a3b8', fontStyle: 'italic' }}>
@@ -380,16 +455,31 @@ export default function App() {
             </div>
           </div>
 
-          {/* Floating Actions overlay (Top-Right Summary Drawer button + Center Graph button) */}
+          {/* Floating Actions overlay (Top-Right Action Buttons) */}
           <div className="floating-actions-overlay">
             <button className="floating-action-btn" onClick={handleCenterGraph} title="Center Graph">
               <Compass className="h-5 w-5" />
             </button>
 
+            {/* Evidence Documents button */}
+            <button 
+              className={`floating-action-btn docs-trigger-btn ${documents.length > 0 ? 'pulse-green' : ''}`}
+              onClick={() => {
+                setIsDocsOpen(true);
+                setIsSummaryOpen(false);
+              }}
+              title="View Evidence Documents"
+            >
+              <Book className="h-5 w-5" />
+              {documents.length > 0 && <span className="doc-count-badge">{documents.length}</span>}
+            </button>
+
+            {/* Case Summary Report button */}
             <button 
               className={`floating-action-btn summary-trigger-btn ${hasNewSummary ? 'pulse-border' : ''}`} 
               onClick={() => {
                 setIsSummaryOpen(true);
+                setIsDocsOpen(false);
                 setHasNewSummary(false);
               }}
               title="View Case Narrative"
@@ -399,7 +489,7 @@ export default function App() {
             </button>
           </div>
 
-          {/* Slide-over Full-Height Summary Panel / Modal */}
+          {/* Slide-over Full-Height Summary Panel / Drawer */}
           {isSummaryOpen && (
             <div className="narrative-drawer">
               <div className="drawer-header">
@@ -414,13 +504,66 @@ export default function App() {
               <div className="drawer-body">
                 {narrative ? (
                   <div className="narrative-markdown">
-                    {narrative}
+                    {renderMarkdown(narrative)}
                   </div>
                 ) : (
                   <div className="empty-drawer-state">
                     <AlertTriangle className="h-10 w-10 text-slate-300" style={{ marginBottom: '12px' }} />
                     <p>No narrative report drafted yet.</p>
                     <span>The Case Narrative will automatically compile and notify you once the multi-agent correlation cycle completes.</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Slide-over Full-Height Evidence Documents Drawer */}
+          {isDocsOpen && (
+            <div className="narrative-drawer">
+              <div className="drawer-header">
+                <div className="drawer-title">
+                  <Book className="h-5 w-5" style={{ color: '#10b981' }} />
+                  <h2>Evidence Documents ({documents.length})</h2>
+                </div>
+                <button className="close-drawer-btn" onClick={() => setIsDocsOpen(false)}>
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+              <div className="drawer-body">
+                {documents.length === 0 ? (
+                  <div className="empty-drawer-state">
+                    <Book className="h-10 w-10 text-slate-300" style={{ marginBottom: '12px' }} />
+                    <p>No evidence documents retrieved yet.</p>
+                    <span>As search queries are executed in each round, Tavily source materials will accumulate and persist here.</span>
+                  </div>
+                ) : (
+                  <div className="docs-flow-container">
+                    {documents.map((doc) => {
+                      const isExpanded = expandedDocId === doc.id;
+                      return (
+                        <div key={doc.id} className="doc-card">
+                          <div className="doc-card-header" onClick={() => setExpandedDocId(isExpanded ? null : doc.id)}>
+                            <div className="doc-card-title-group">
+                              <span className="doc-id-badge">{doc.id.toUpperCase()}</span>
+                              <h4 className="doc-title">{doc.title}</h4>
+                            </div>
+                            <ChevronRight className={`expand-arrow ${isExpanded ? 'rotate-90' : ''}`} />
+                          </div>
+                          
+                          {isExpanded && (
+                            <div className="doc-card-content">
+                              {doc.url && (
+                                <a href={doc.url} target="_blank" rel="noopener noreferrer" className="doc-link">
+                                  <Link2 className="h-3 w-3" />
+                                  <span>View Original Source</span>
+                                </a>
+                              )}
+                              <p className="doc-text">{doc.content}</p>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -491,6 +634,9 @@ export default function App() {
                   <div class="graph-tooltip">
                     <div class="tooltip-title">${node.name}</div>
                     <div class="tooltip-type">${node.type.toUpperCase()}</div>
+                    
+                    <div class="tooltip-description">${node.description || 'No description available'}</div>
+                    
                     ${node.attributes && Object.keys(node.attributes).length > 0 
                       ? `<div class="tooltip-attrs">
                           ${Object.entries(node.attributes)

@@ -36,6 +36,7 @@ Expected Output:
       "id": "oceanic_shell_corp",
       "type": "organization",
       "name": "Oceanic Shell Corp",
+      "description": "An offshore shell company registered in Panama used as the origin entity for a $4.5M cash transfer.",
       "attributes": {"role": "transfer_origin", "amount": "$4.5M", "date": "October 12, 2023"},
       "source_document_id": "doc_778A",
       "source_snippet": "Oceanic Shell Corp quietly transferred $4.5M"
@@ -44,6 +45,7 @@ Expected Output:
       "id": "viktor_bout",
       "type": "person",
       "name": "Viktor Bout",
+      "description": "An international arms dealer and financier identified as the beneficiary destination account of the offshore transfer.",
       "attributes": {"role": "transfer_destination"},
       "source_document_id": "doc_778A",
       "source_snippet": "to the offshore account of Viktor Bout"
@@ -52,6 +54,7 @@ Expected Output:
       "id": "apex_legal",
       "type": "organization",
       "name": "Apex Legal",
+      "description": "A boutique legal firm responsible for managing Viktor Bout's offshore destination account.",
       "attributes": {"role": "account_manager"},
       "source_document_id": "doc_778A",
       "source_snippet": "managed by Apex Legal"

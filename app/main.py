@@ -66,6 +66,7 @@ class ExtractorNodeWrapper:
         self.id = node_dict.get("id")
         self.type = node_dict.get("type")
         self.name = node_dict.get("name")
+        self.description = node_dict.get("description", "")
         self.attributes = node_dict.get("attributes", {})
         self.source_document_id = node_dict.get("source_document_id")
         self.source_snippet = node_dict.get("source_snippet")
@@ -287,6 +288,20 @@ Write only the queries, one per line. No extra explanation.
                 })
                 continue
                 
+            # Stream the newly fetched documents to the frontend for persistence
+            await websocket.send_json({
+                "type": "documents_added",
+                "data": [
+                    {
+                        "id": doc["id"],
+                        "title": doc["title"],
+                        "url": doc["url"],
+                        "content": doc["content"]
+                    }
+                    for doc in doc_queue
+                ]
+            })
+                
             # --- Extractor Phase (Batching) ---
             await websocket.send_json({
                 "type": "status",
@@ -329,6 +344,7 @@ Follow the Pydantic schema strictly. Tag each extracted entity with the source_d
                         "id": node_obj.id,
                         "type": node_obj.type,
                         "name": node_obj.name,
+                        "description": node_obj.description,
                         "attributes": node_obj.attributes,
                         "source_document_id": node_obj.source_document_id,
                         "source_snippet": node_obj.source_snippet

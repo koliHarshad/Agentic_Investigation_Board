@@ -10,6 +10,7 @@ class ExtractedNode(BaseModel):
     id: str = Field(description="Unique generated slug/ID for the entity, lowercase, alphanumeric, underscore (e.g. 'john_doe')")
     type: Literal["person", "organization", "event", "location", "financial_instrument", "other"]
     name: str = Field(description="Display name of the entity")
+    description: str = Field(description="A brief, detailed description of the node, its role, who this is, and key context.")
     attributes: Dict[str, Any] = Field(default_factory=dict, description="Additional properties, e.g. title, date, owner, role, value, connection details")
     source_document_id: str = Field(description="The identifier of the source document this node came from")
     source_snippet: str = Field(description="A short quote/reference from the source document confirming this entity")
@@ -58,10 +59,15 @@ researcher_agent = Agent(
 )
 
 # 3. Extractor
+extractor_instruction = (
+    load_skill_instruction('.agents/skills/extractor-skill/SKILL.md') + 
+    "\n\n" + 
+    load_skill_instruction('.agents/skills/output-validator-skill/SKILL.md')
+)
 extractor_agent = Agent(
     name="extractor",
     model="gemini-3.1-flash-lite",
-    instruction=load_skill_instruction('.agents/skills/extractor-skill/SKILL.md'),
+    instruction=extractor_instruction,
     output_schema=ExtractorOutput,
     output_key="extracted_nodes"
 )
