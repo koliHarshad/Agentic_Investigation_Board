@@ -116,106 +116,198 @@ export default function App() {
   const handleStartInvestigation = () => {
     if (!query.trim() || isInvestigating) return;
 
-    // Reset State
-    setActiveQuery(query);
-    setStatusLogs([]);
-    setOrchestratorPlan('');
-    setResearchQueries([]);
-    setGraphData({ nodes: [], links: [] });
-    setNarrative('');
-    setErrorMsg('');
-    setHasNewSummary(false);
-    setIsSummaryOpen(false);
-    setDocuments([]);
-    setIsDocsOpen(false);
-    setExpandedDocId(null);
     setIsInvestigating(true);
+    setErrorMsg('');
 
-    const ws = new WebSocket('ws://127.0.0.1:8000/ws/investigate');
-    wsRef.current = ws;
+    // If it's a completely new session (no active query yet), reset everything
+    if (!activeQuery) {
+      setActiveQuery(query);
+      setStatusLogs([]);
+      setOrchestratorPlan('');
+      setResearchQueries([]);
+      setGraphData({ nodes: [], links: [] });
+      setNarrative('');
+      setDocuments([]);
+      setHasNewSummary(false);
+      setIsSummaryOpen(false);
+      setIsDocsOpen(false);
+      setExpandedDocId(null);
 
-    ws.onopen = () => {
-      ws.send(JSON.stringify({ query: query }));
-      setStatusLogs(prev => [...prev, 'Connected to correlation engine. Initiating multi-agent pipeline...']);
-    };
+      // Open WebSocket
+      const ws = new WebSocket('ws://127.0.0.1:8000/ws/investigate');
+      wsRef.current = ws;
 
-    ws.onmessage = (event) => {
-      const msg = JSON.parse(event.data);
+      ws.onopen = () => {
+        ws.send(JSON.stringify({ query: query }));
+        setStatusLogs(prev => [...prev, 'Connected to correlation engine. Initiating multi-agent pipeline...']);
+      };
+
+      ws.onmessage = (event) => {
+        const msg = JSON.parse(event.data);
+        
+        switch (msg.type) {
+          case 'status':
+            setStatusLogs(prev => [...prev, msg.data]);
+            break;
+          case 'orchestrator_plan':
+            setOrchestratorPlan(msg.data);
+            break;
+          case 'research_queries':
+            setResearchQueries(msg.data);
+            break;
+          case 'documents_added':
+            setDocuments(prev => {
+              const newDocs = msg.data.filter(d => !prev.some(p => p.id === d.id));
+              return [...prev, ...newDocs];
+            });
+            break;
+          case 'node_added':
+            setGraphData(prev => {
+              if (prev.nodes.some(n => n.id === msg.data.id)) return prev;
+              return {
+                ...prev,
+                nodes: [...prev.nodes, msg.data]
+              };
+            });
+            setStatusLogs(prev => [...prev, `[Clue Extracted] Found node: ${msg.data.name} (${msg.data.type})`]);
+            break;
+          case 'edge_added':
+            setGraphData(prev => {
+              const exists = prev.links.some(
+                l => (l.source === msg.data.source && l.target === msg.data.target) ||
+                     (l.source === msg.data.target && l.target === msg.data.source)
+              );
+              if (exists) return prev;
+              return {
+                ...prev,
+                links: [...prev.links, msg.data]
+              };
+            });
+            setStatusLogs(prev => [...prev, `[Connection Judged] Added relationship: ${msg.data.source} ↔ ${msg.data.target} (${msg.data.type})`]);
+            break;
+          case 'narrative':
+            setNarrative(msg.data);
+            break;
+          case 'complete':
+            setStatusLogs(prev => [...prev, 'Investigation sequence completed. Final story rendered.']);
+            setIsInvestigating(false);
+            setTimeout(() => {
+              if (graphRef.current) {
+                graphRef.current.zoomToFit(600, 80);
+              }
+            }, 800);
+            break;
+          case 'error':
+            setErrorMsg(msg.data);
+            setStatusLogs(prev => [...prev, `[Error] ${msg.data}`]);
+            setIsInvestigating(false);
+            break;
+          default:
+            break;
+        }
+      };
+
+      ws.onerror = (err) => {
+        console.error('WebSocket Error:', err);
+        setErrorMsg('Failed to connect to backend server. Make sure FastAPI server is running on port 8000.');
+        setIsInvestigating(false);
+      };
+
+      ws.onclose = () => {
+        setIsInvestigating(false);
+      };
+    } else {
+      // It is a follow-up query in the same active session!
+      setStatusLogs(prev => [...prev, `[Follow-up Query] ${query}`]);
       
-      switch (msg.type) {
-        case 'status':
-          setStatusLogs(prev => [...prev, msg.data]);
-          break;
-        case 'orchestrator_plan':
-          setOrchestratorPlan(msg.data);
-          break;
-        case 'research_queries':
-          setResearchQueries(msg.data);
-          break;
-        case 'documents_added':
-          setDocuments(prev => {
-            const newDocs = msg.data.filter(d => !prev.some(p => p.id === d.id));
-            return [...prev, ...newDocs];
-          });
-          break;
-        case 'node_added':
-          setGraphData(prev => {
-            if (prev.nodes.some(n => n.id === msg.data.id)) return prev;
-            return {
-              ...prev,
-              nodes: [...prev.nodes, msg.data]
-            };
-          });
-          setStatusLogs(prev => [...prev, `[Clue Extracted] Found node: ${msg.data.name} (${msg.data.type})`]);
-          break;
-        case 'edge_added':
-          setGraphData(prev => {
-            const exists = prev.links.some(
-              l => (l.source === msg.data.source && l.target === msg.data.target) ||
-                   (l.source === msg.data.target && l.target === msg.data.source)
-            );
-            if (exists) return prev;
-            return {
-              ...prev,
-              links: [...prev.links, msg.data]
-            };
-          });
-          setStatusLogs(prev => [...prev, `[Connection Judged] Added relationship: ${msg.data.source} ↔ ${msg.data.target} (${msg.data.type})`]);
-          break;
-        case 'narrative':
-          setNarrative(msg.data);
-          break;
-        case 'complete':
-          setStatusLogs(prev => [...prev, 'Investigation sequence completed. Final story rendered.']);
+      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+        wsRef.current.send(JSON.stringify({ query: query }));
+      } else {
+        // Reopen WebSocket if closed
+        const ws = new WebSocket('ws://127.0.0.1:8000/ws/investigate');
+        wsRef.current = ws;
+        
+        ws.onopen = () => {
+          ws.send(JSON.stringify({ query: query }));
+          setStatusLogs(prev => [...prev, 'Reconnected to correlation engine. Resuming investigation...']);
+        };
+        
+        ws.onmessage = (event) => {
+          const msg = JSON.parse(event.data);
+          switch (msg.type) {
+            case 'status':
+              setStatusLogs(prev => [...prev, msg.data]);
+              break;
+            case 'orchestrator_plan':
+              setOrchestratorPlan(msg.data);
+              break;
+            case 'research_queries':
+              setResearchQueries(msg.data);
+              break;
+            case 'documents_added':
+              setDocuments(prev => {
+                const newDocs = msg.data.filter(d => !prev.some(p => p.id === d.id));
+                return [...prev, ...newDocs];
+              });
+              break;
+            case 'node_added':
+              setGraphData(prev => {
+                if (prev.nodes.some(n => n.id === msg.data.id)) return prev;
+                return {
+                  ...prev,
+                  nodes: [...prev.nodes, msg.data]
+                };
+              });
+              setStatusLogs(prev => [...prev, `[Clue Extracted] Found node: ${msg.data.name} (${msg.data.type})`]);
+              break;
+            case 'edge_added':
+              setGraphData(prev => {
+                const exists = prev.links.some(
+                  l => (l.source === msg.data.source && l.target === msg.data.target) ||
+                       (l.source === msg.data.target && l.target === msg.data.source)
+                );
+                if (exists) return prev;
+                return {
+                  ...prev,
+                  links: [...prev.links, msg.data]
+                };
+              });
+              setStatusLogs(prev => [...prev, `[Connection Judged] Added relationship: ${msg.data.source} ↔ ${msg.data.target} (${msg.data.type})`]);
+              break;
+            case 'narrative':
+              setNarrative(msg.data);
+              break;
+            case 'complete':
+              setStatusLogs(prev => [...prev, 'Investigation sequence completed. Final story rendered.']);
+              setIsInvestigating(false);
+              setTimeout(() => {
+                if (graphRef.current) {
+                  graphRef.current.zoomToFit(600, 80);
+                }
+              }, 800);
+              break;
+            case 'error':
+              setErrorMsg(msg.data);
+              setStatusLogs(prev => [...prev, `[Error] ${msg.data}`]);
+              setIsInvestigating(false);
+              break;
+            default:
+              break;
+          }
+        };
+        
+        ws.onerror = (err) => {
+          console.error('WebSocket Error:', err);
+          setErrorMsg('Failed to reconnect to backend server.');
           setIsInvestigating(false);
-          // Wait for D3 simulation to settle
-          setTimeout(() => {
-            if (graphRef.current) {
-              graphRef.current.zoomToFit(600, 80);
-            }
-          }, 800);
-          ws.close();
-          break;
-        case 'error':
-          setErrorMsg(msg.data);
-          setStatusLogs(prev => [...prev, `[Error] ${msg.data}`]);
+        };
+        
+        ws.onclose = () => {
           setIsInvestigating(false);
-          ws.close();
-          break;
-        default:
-          break;
+        };
       }
-    };
-
-    ws.onerror = (err) => {
-      console.error('WebSocket Error:', err);
-      setErrorMsg('Failed to connect to backend server. Make sure FastAPI server is running on port 8000.');
-      setIsInvestigating(false);
-    };
-
-    ws.onclose = () => {
-      setIsInvestigating(false);
-    };
+    }
+    setQuery('');
   };
 
   const paintNode = useCallback((node, ctx, globalScale) => {
@@ -661,7 +753,6 @@ export default function App() {
                     </div>
                     <div class="tooltip-snippet">
                       <strong>Confidence:</strong> ${(link.confidence * 100).toFixed(0)}%
-                      <br/><strong>Reasoning:</strong> "${link.reasoning}"
                     </div>
                   </div>
                 `}
