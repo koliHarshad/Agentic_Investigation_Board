@@ -4,8 +4,6 @@ A multi-agent system that turns a single investigative prompt into a live, growi
 
 > Example: "Investigate the collapse of Company X" → the system researches, extracts entities, finds connections, and drafts a cited case narrative — all visible in real time on the board.
 
-![Architecture Diagram](docs/architecture.png)
-
 ---
 
 ## How It Works
@@ -19,6 +17,7 @@ Five agents, each with one narrow job, run as a sequential pipeline (not a free-
 5. **Narrator** — once the investigation is complete, reads the full confirmed graph (not raw documents) and drafts a cited case narrative.
 
 A 6th component, the **Output Validator**, isn't an investigative agent but a guardrail layer: it enforces strict JSON schemas, strips unsafe HTML/script content from anything pulled off the open web, and rejects malformed agent output before it reaches the graph or the UI.
+<img width="9162" height="1596" alt="Aegis App Geospace Warning System Block Diagram - visual selection (1)" src="https://github.com/user-attachments/assets/88b10cf8-77a6-4c90-a9df-d141320016d4" />
 
 ---
 
